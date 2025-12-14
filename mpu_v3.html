@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPU6050 Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            background: #0a0a1a;
+        }
+        #container { width: 100vw; height: 100vh; }
+        
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #333;
+            z-index: 100;
+        }
+        
+        .header-left h1 {
+            color: #fff;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .header-left p {
+            color: #888;
+            font-size: 13px;
+        }
+        
+        .header-right {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .ip-input {
+            padding: 10px 15px;
+            background: #1a1a2e;
+            border: 2px solid #333;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 14px;
+            width: 200px;
+        }
+        
+        .ip-input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+        
+        button {
+            padding: 10px 25px;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-connect {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-connect:hover:not(:disabled) {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+        
+        .btn-disconnect {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-disconnect:hover:not(:disabled) {
+            background: #da190b;
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 15px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 6px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .status-connected { 
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-disconnected { 
+            background: #f44336;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .status-text {
+            color: white;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .hud-panel {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #333;
+            min-width: 250px;
+        }
+        
+        .hud-left { 
+            top: 120px; 
+            left: 30px; 
+        }
+        
+        .hud-right { 
+            top: 120px; 
+            right: 30px; 
+        }
+        
+        .hud-bottom {
+            bottom: 30px;
+            left: 30px;
+        }
+        
+        .hud-title {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+        
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 15px;
+        }
+        
+        .data-label {
+            color: #aaa;
+            font-weight: 500;
+        }
+        
+        .data-value {
+            font-weight: bold;
+            min-width: 90px;
+            text-align: right;
+        }
+        
+        .value-pitch { color: #42A5F5; }
+        .value-roll { color: #66BB6A; }
+        .value-yaw { color: #FFA726; }
+        .value-accel-x { color: #EF5350; }
+        .value-accel-y { color: #66BB6A; }
+        .value-accel-z { color: #42A5F5; }
+        .value-gyro-x { color: #AB47BC; }
+        .value-gyro-y { color: #26C6DA; }
+        .value-gyro-z { color: #FFCA28; }
+        
+        .message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px 50px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 18px;
+            border: 2px solid #333;
+            display: none;
+        }
+        
+        .message.show { display: block; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <h1>MPU6050 Dashboard</h1>
+            <p>Real-time 6-axis IMU Sensor Monitoring</p>
+        </div>
+        <div class="header-right">
+            <input 
+                type="text" 
+                id="rpiIP" 
+                class="ip-input" 
+                placeholder="Raspberry Pi IP (e.g., 192.168.1.100)"
+                value="192.168.1.100"
+            >
+            <div class="status">
+                <div class="status-dot status-disconnected" id="statusDot"></div>
+                <span class="status-text" id="statusText">Disconnected</span>
+            </div>
+            <button id="connectBtn" class="btn-connect">Connect</button>
+            <button id="disconnectBtn" class="btn-disconnect" disabled>Disconnect</button>
+        </div>
+    </div>
+    
+    <div id="container"></div>
+    
+    <div class="hud-panel hud-left">
+        <div class="hud-title">Orientation (degrees)</div>
+        <div class="data-row">
+            <span class="data-label">Pitch:</span>
+            <span class="data-value value-pitch" id="pitch">--</span>
+        </div>
+        <div class="data-row">
+            <span class="data-label">Roll:</span>
+            <span class="data-value value-roll" id="roll">--</span>
+        </div>
+        <div class="data-row">
+            <span class="data-label">Yaw:</span>
+            <span class="data-value value-yaw" id="yaw">--</span>
+        </div>
+    </div>
+    
+    <div class="hud-panel hud-right">
+        <div class="hud-title">Acceleration (g)</div>
+        <div class="data-row">
+            <span class="data-label">X:</span>
+            <span class="data-value value-accel-x" id="accelX">--</span>
+        </div>
+        <div class="data-row">
+            <span class="data-label">Y:</span>
+            <span class="data-value value-accel-y" id="accelY">--</span>
+        </div>
+        <div class="data-row">
+            <span class="data-label">Z:</span>
+            <span class="data-value value-accel-z" id="accelZ">--</span>
+        </div>
+    </div>
+    
+    <div class="hud-panel hud-bottom">
+        <div class="hud-title">Gyroscope (°/s)</div>
+        <div class="data-row">
+            <span class="data-label">X:</span>
+            <span class="data-value value-gyro-x" id="gyroX">--</span>
+        </div>
+        <div class="data-row">
+            <span class="data-label">Y:</span>
+            <span class="data-value value-gyro-y" id="gyroY">--</span>
+        </div>
+        <div class="data-row">
+            <span class="data-label">Z:</span>
+            <span class="data-value value-gyro-z" id="gyroZ">--</span>
+        </div>
+    </div>
+    
+    <div class="message" id="message">
+        Waiting for sensor data...
+    </div>
+
+    <script>
+        // Three.js Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0a1a);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 4, 8);
+        camera.lookAt(0, 0, 0);
+        
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.getElementById('container').appendChild(renderer.domElement);
+        
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(5, 10, 7);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+        
+        // Grid
+        const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+        scene.add(gridHelper);
+        
+        // Axes Helper
+        const axesHelper = new THREE.AxesHelper(4);
+        scene.add(axesHelper);
+        
+        // Create Rectangle Box (MPU6050 board representation)
+        const boxGeometry = new THREE.BoxGeometry(4, 0.4, 2.5);
+        const boxMaterial = new THREE.MeshPhongMaterial({ 
+            color: 0x2196F3,
+            shininess: 100,
+            specular: 0x444444
+        });
+        const box = new THREE.Mesh(boxGeometry, boxMaterial);
+        box.castShadow = true;
+        box.receiveShadow = true;
+        box.position.y = 2;
+        scene.add(box);
+        
+        // Add direction indicator (forward arrow)
+        const arrowGeometry = new THREE.ConeGeometry(0.4, 0.8, 8);
+        const arrowMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+        arrow.position.set(0, 0.6, -0.9);
+        arrow.rotation.x = Math.PI / 2;
+        box.add(arrow);
+        
+        // Add white edges to visualize orientation better
+        const edgesGeometry = new THREE.EdgesGeometry(boxGeometry);
+        const edgesMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+        const edges = new THREE.LineSegments(edgesGeometry, edgesMaterial);
+        box.add(edges);
+        
+        // WebSocket
+        let ws = null;
+        let connected = false;
+        
+        // UI Elements
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const rpiIPInput = document.getElementById('rpiIP');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const message = document.getElementById('message');
+        
+        // Connect Function
+        connectBtn.addEventListener('click', () => {
+            const rpiIP = rpiIPInput.value.trim();
+            
+            if (!rpiIP) {
+                alert('Please enter Raspberry Pi IP address!');
+                return;
+            }
+            
+            message.classList.add('show');
+            message.textContent = 'Connecting to ' + rpiIP + '...';
+            
+            ws = new WebSocket(`ws://${rpiIP}:8765`);
+            
+            ws.onopen = () => {
+                connected = true;
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                rpiIPInput.disabled = true;
+                statusDot.className = 'status-dot status-connected';
+                statusText.textContent = 'Connected';
+                message.classList.remove('show');
+                console.log('Connected to MPU6050 server');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    updateDashboard(data);
+                } catch (e) {
+                    console.error('Error parsing data:', e);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                message.textContent = 'Connection Failed! Check IP and server.';
+                setTimeout(() => message.classList.remove('show'), 3000);
+            };
+            
+            ws.onclose = () => {
+                connected = false;
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                rpiIPInput.disabled = false;
+                statusDot.className = 'status-dot status-disconnected';
+                statusText.textContent = 'Disconnected';
+                resetDashboard();
+                console.log('Disconnected from server');
+            };
+        });
+        
+        // Disconnect Function
+        disconnectBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+            }
+        });
+        
+        // Update Dashboard
+        function updateDashboard(data) {
+            // Update orientation values
+            document.getElementById('pitch').textContent = data.pitch.toFixed(1) + '°';
+            document.getElementById('roll').textContent = data.roll.toFixed(1) + '°';
+            document.getElementById('yaw').textContent = data.yaw.toFixed(1) + '°';
+            
+            // Update acceleration values
+            document.getElementById('accelX').textContent = data.accelX.toFixed(3);
+            document.getElementById('accelY').textContent = data.accelY.toFixed(3);
+            document.getElementById('accelZ').textContent = data.accelZ.toFixed(3);
+            
+            // Update gyroscope values
+            document.getElementById('gyroX').textContent = data.gyroX.toFixed(1);
+            document.getElementById('gyroY').textContent = data.gyroY.toFixed(1);
+            document.getElementById('gyroZ').textContent = data.gyroZ.toFixed(1);
+            
+            // Update 3D box rotation
+            const pitch = (data.pitch * Math.PI) / 180;
+            const roll = (data.roll * Math.PI) / 180;
+            const yaw = (data.yaw * Math.PI) / 180;
+            
+            box.rotation.x = pitch;
+            box.rotation.z = roll;
+            box.rotation.y = yaw;
+        }
+        
+        // Reset Dashboard
+        function resetDashboard() {
+            const fields = ['pitch', 'roll', 'yaw', 'accelX', 'accelY', 'accelZ', 'gyroX', 'gyroY', 'gyroZ'];
+            fields.forEach(field => {
+                document.getElementById(field).textContent = '--';
+            });
+            
+            box.rotation.x = 0;
+            box.rotation.y = 0;
+            box.rotation.z = 0;
+        }
+        
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+        
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
